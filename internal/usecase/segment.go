@@ -29,20 +29,25 @@ func New(r SegmentRepo) *SegmentUseCase {
 
 func (uc *SegmentUseCase) GetId(tag string) (id int64, err error) {
 	// 不同tag串行？
-	uc.alloc.Mu.Lock()
-	defer uc.alloc.Mu.Unlock()
-
+	uc.alloc.Mu.RLock()
 	val, ok := uc.alloc.BizTagMap[tag]
+	uc.alloc.Mu.RUnlock()
+
 	if !ok {
-		// tag 不存在则创建
-		if err = uc.CreateTag(&entity.Segments{
-			BizTag: tag,
-			MaxId:  1,
-			Step:   10000,
-		}); err != nil {
-			return 0, err
+		uc.alloc.Mu.Lock()
+		// double-check
+		val, ok = uc.alloc.BizTagMap[tag]
+		if !ok {
+			if err = uc.CreateTag(&entity.Segments{
+				BizTag: tag,
+				MaxId:  1,
+				Step:   10000,
+			}); err != nil {
+				return 0, err
+			}
+			val, _ = uc.alloc.BizTagMap[tag]
 		}
-		val, _ = uc.alloc.BizTagMap[tag]
+		uc.alloc.Mu.Unlock()
 	}
 	return val.GetId(uc)
 }
