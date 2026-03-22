@@ -28,6 +28,7 @@ func New(r SegmentRepo) *SegmentUseCase {
 }
 
 func (uc *SegmentUseCase) GetId(tag string) (id int64, err error) {
+	// 不同tag串行？
 	uc.alloc.Mu.Lock()
 	defer uc.alloc.Mu.Unlock()
 

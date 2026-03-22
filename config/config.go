@@ -33,7 +33,7 @@ type (
 
 	// MySQL -.
 	MySQL struct {
-		URL          string `env-required:"true"                 env:"MYSQL_URL"`
+		URL          string `env-required:"true" yaml:"host" env:"MYSQL_URL"`
 		MaxIdleConns int    `env-required:"true" yaml:"max_idle_conns" env:"MAX_IDLE_CONNS"`
 		MaxOpenConns int    `env-required:"true" yaml:"max_open_conns" env:"MAX_OPEN_CONNS"`
 	}

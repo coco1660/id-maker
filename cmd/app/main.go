@@ -1,9 +1,8 @@
 package main
 
 import (
-	"log"
-
 	"github.com/ilyakaznacheev/cleanenv"
+	"log"
 
 	"id-maker/config"
 	"id-maker/internal/app"

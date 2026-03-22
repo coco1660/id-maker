@@ -77,7 +77,7 @@ func (b *BizAlloc) GetId(uc *SegmentUseCase) (id int64, err error) {
 	}
 	b.Mu.Lock()
 	if b.LeftIdCount() > 0 {
-		id = b.PopId()
+		id = b.PopId() // ？？canGetId
 	} else {
 		err = errors.New("no get id")
 	}
@@ -97,7 +97,7 @@ func (b *BizAlloc) GetIdArray(cancel context.CancelFunc, uc *SegmentUseCase) {
 			b.GetDb = false
 			break
 		}
-		b.Mu.Lock()
+		b.Mu.Lock() // ？？？？？？？？？？？？？？？？？？？？
 		if len(b.IdArray) <= 1 {
 			b.Mu.Unlock()
 			ids, err = uc.repo.GetNextId(b.BazTag)

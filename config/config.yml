@@ -3,7 +3,7 @@ app:
   version: '1.0.0'
 
 http:
-  port: '8080'
+  port: '8000'
 
 grpc:
   port: '50051'
@@ -13,5 +13,10 @@ logger:
   rollbar_env: 'id-maker'
 
 mysql:
+  type: mysql
+  user: root
+  password: 123456
+  host: root:123456@tcp(localhost:3307)/blog
+  name: blog
   max_idle_conns: 10
   max_open_conns: 20
