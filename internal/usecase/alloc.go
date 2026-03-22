@@ -62,6 +62,8 @@ func (b *BizAlloc) GetId(uc *SegmentUseCase) (id int64, err error) {
 	}
 	//分配ID数组不足开始携程去申请新的ID
 	if len(b.IdArray) <= 1 && !b.GetDb {
+		// 在加锁范围内设置共享变量，记录当前有协程去操作数据库
+		// 然后释放锁，去执行数据库操作
 		b.GetDb = true
 		b.Mu.Unlock()
 		go b.GetIdArray(cancel, uc)
@@ -72,6 +74,7 @@ func (b *BizAlloc) GetId(uc *SegmentUseCase) (id int64, err error) {
 	if canGetId {
 		return
 	}
+	// 当前协程等待去数据库操作完成
 	select {
 	case <-ctx.Done(): //执行结束或者超时
 	}
@@ -91,13 +94,17 @@ func (b *BizAlloc) GetIdArray(cancel context.CancelFunc, uc *SegmentUseCase) {
 		ids    *entity.Segments
 		err    error
 	)
+	// 完成数据库操作后，通知主协程
 	defer cancel()
 	for {
 		if tryNum >= 3 { //失败重试 3 次
+			b.Mu.Lock()
+			// 修改共享状态加锁
 			b.GetDb = false
+			b.Mu.Unlock()
 			break
 		}
-		b.Mu.Lock() // ？？？？？？？？？？？？？？？？？？？？
+		b.Mu.Lock()
 		if len(b.IdArray) <= 1 {
 			b.Mu.Unlock()
 			ids, err = uc.repo.GetNextId(b.BazTag)
