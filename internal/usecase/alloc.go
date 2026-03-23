@@ -18,8 +18,8 @@ type Alloc struct {
 type BizAlloc struct {
 	Mu      sync.Mutex
 	BazTag  string
-	IdArray []*IdArray
-	GetDb   bool //当前正在查询DB
+	IdArray []*IdArray // 最多2段，0段标识当前正在发号的号段；1段后台提前从DB预期
+	GetDb   bool       //当前正在查询DB
 }
 
 type IdArray struct {
@@ -56,16 +56,18 @@ func (b *BizAlloc) GetId(uc *SegmentUseCase) (id int64, err error) {
 		ctx, cancel = context.WithTimeout(context.Background(), time.Second*3)
 	)
 	b.Mu.Lock()
+	// 先尝试内存拿号
 	if b.LeftIdCount() > 0 {
-		id = b.PopId()
+		// LeftIdCount统计两段中全部的剩余号
+		id = b.PopId() // 可能移除了1个段
 		canGetId = true
 	}
 	//分配ID数组不足开始携程去申请新的ID
 	if len(b.IdArray) <= 1 && !b.GetDb {
 		// 在加锁范围内设置共享变量，记录当前有协程去操作数据库
-		// 然后释放锁，去执行数据库操作
+		// 然后释放锁，去执行数据库操作，避免在锁中执行DB操作
 		b.GetDb = true
-		b.Mu.Unlock()
+		b.Mu.Unlock() // 先解锁再起协程，因为goroutine中也要获取这把锁
 		go b.GetIdArray(cancel, uc)
 	} else {
 		b.Mu.Unlock()
@@ -79,8 +81,9 @@ func (b *BizAlloc) GetId(uc *SegmentUseCase) (id int64, err error) {
 	case <-ctx.Done(): //执行结束或者超时
 	}
 	b.Mu.Lock()
+	// 先快路径拿号；拿不到就等补货；补货后再拿一次
 	if b.LeftIdCount() > 0 {
-		id = b.PopId() // ？？canGetId
+		id = b.PopId()
 	} else {
 		err = errors.New("no get id")
 	}
@@ -142,6 +145,7 @@ func (b *BizAlloc) PopId() (id int64) {
 	b.IdArray[0].Cur++                         //分配次数 +1
 	if id+1 >= b.IdArray[0].End {              //该数组里面没有ID了
 		b.IdArray = append(b.IdArray[:0], b.IdArray[1:]...) //把分配完的数组移除
+		// 把1位置后的数据写入索引0开始
 	}
 	return
 }

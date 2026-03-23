@@ -6,22 +6,25 @@ import (
 	"time"
 )
 
+// 雪花算法：在分布式环境下，不依赖数据库，生成全局唯一、趋势递增的64位整数id
+// id拆成三部分：时间戳（当前时间）+机器id（workid）+序列号（这一秒内的第几个id）
+
 const (
 	workerBits uint8 = 10 // 每台机器(节点)的id位数 10位最大可以有2^10=1024个节点(0-1023)
 	numberBits uint8 = 22 // 表示每个集群下的每个节点，1秒内可生成的id序号的二进制位数 即每秒可生成 2^22-1=4194304个唯一id(0-4194303)
 	// 这里求最大值使用了位运算
-	workerMax   int64 = ^(-1 << workerBits)     // 节点ID的最大值，用于防止溢出
+	workerMax   int64 = ^(-1 << workerBits)     // 节点ID的最大值，用于防止溢出，10位能表示的最大值，在补码中-1可以理解成全1，左移10位后，低10位变成0，按位取反后0000001111111111
 	numberMax   int64 = ^(-1 << numberBits)     // 每个节点，1秒内可生成的id序号最大值
 	timeShift   uint8 = workerBits + numberBits // 时间戳向左的偏移量
 	workerShift uint8 = numberBits              // 节点id向左的偏移量
 	// 31位字节作为时间戳数值的话 大约68年就会用完
 	// 假如你2010年1月1日开始开发系统 如果不减去2010年1月1日的时间戳 那么白白浪费40年的时间戳啊！
 	// 这个一旦定义且开始生成ID后千万不要改了 不然可能会生成相同的ID
-	epoch int64 = 1594364131 //这个是我在写epoch这个变量时的时间戳(秒)
+	epoch int64 = 1774241828 //自定义起始时间戳，这个是我在写epoch这个变量时的时间戳(秒)
 )
 
 type Worker struct {
-	mu        sync.Mutex // 添加互斥锁 确保并发安全
+	mu        sync.Mutex // 添加互斥锁 确保并发安全，确保同一个worker在并发调用getid时，内部状态不会乱
 	timestamp int64      // 记录时间戳
 	workerId  int64      // 该节点的ID
 	number    int64      // 当前毫秒已经生成的id序列号(从0开始累加) 1秒内最多生成4194304个id
@@ -48,12 +51,14 @@ func (w *Worker) GetId() int64 {
 	defer w.mu.Unlock()
 	//获取生成时的时间戳
 	now := w.Now()
+	// 当前时间和上一次生成id的时间相同，说明还在同一秒内
 	if now == w.timestamp {
 		w.number++
 		//这里要判断，当前工作节点是否在1秒内已经生成numberMax个id
 		if w.number > numberMax {
 			//如果当前工作节点在1秒内生成的id已经超过上限 需要等待1秒再继续生成
 			w.number = 0
+			// 自旋等待，比较浪费CPU
 			for now <= w.timestamp {
 				now = w.Now()
 			}
@@ -64,8 +69,9 @@ func (w *Worker) GetId() int64 {
 		w.number = 0
 		//将机器上一次生成id的时间更新为当前时间
 		w.timestamp = now
-
 	} else {
+		// 系统时钟回拨了，当前时间比上次生成id的时间还小
+		// 一直等到时间追上，宁可阻塞，也不冒重复id的风险
 		for now < w.timestamp {
 			now = w.Now()
 		}

@@ -55,12 +55,13 @@ func (r *SegmentRepo) GetNextId(tag string) (*entity.Segments, error) {
 		id  = &entity.Segments{}
 		tx  = r.Engine.Prepare()
 	)
-
+	// update操作数据库会加行锁，即使是分布式也不会出现数据重复
 	if _, err = tx.Exec(
 		"update segments set max_id=max_id+step, update_time = ? where biz_tag = ?", time.Now(), tag); err != nil {
 		_ = tx.Rollback()
 		return id, fmt.Errorf("SegmentRepo - GetNextId - Exec: %w", err)
 	}
+	// 增加id后重新查询数据库，id是个struct类型，表数据映射到结构体对象
 	if _, err = tx.Where("biz_tag = ?", tag).Get(id); err != nil {
 		_ = tx.Rollback()
 		return id, fmt.Errorf("SegmentRepo - GetNextId - Get: %w", err)
