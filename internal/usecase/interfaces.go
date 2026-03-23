@@ -12,11 +12,13 @@ type (
 		CreateTag(*entity.Segments) error
 		GetId(string) (int64, error)
 		SnowFlakeGetId() int64
+		GetBatchId(string, int64) ([]int64, error)
 	}
 
 	SegmentRepo interface {
 		GetList() ([]entity.Segments, error)
 		GetNextId(string) (*entity.Segments, error)
 		Add(*entity.Segments) error
+		GetStep(string) (int64, error)
 	}
 )

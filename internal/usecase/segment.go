@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"fmt"
 	"id-maker/internal/entity"
 	"id-maker/pkg/snowflake"
 )
@@ -74,4 +75,36 @@ func (uc *SegmentUseCase) CreateTag(e *entity.Segments) (err error) {
 	})
 	uc.alloc.BizTagMap[e.BizTag] = b
 	return
+}
+
+func (uc *SegmentUseCase) GetBatchId(tag string, num int64) (ids []int64, err error) {
+	step, err := uc.repo.GetStep(tag)
+	if err != nil {
+		return []int64{}, fmt.Errorf("segment - GetBatchId - Exec: %w", err)
+	}
+	// 限制只能从一个段中取id
+	if step < num {
+		return []int64{}, fmt.Errorf("segment - GetBatchId - num > step - Exec: %w", err)
+	}
+	uc.alloc.Mu.RLock()
+	val, ok := uc.alloc.BizTagMap[tag]
+	uc.alloc.Mu.RUnlock()
+
+	if !ok {
+		uc.alloc.Mu.Lock()
+		// double-check
+		val, ok = uc.alloc.BizTagMap[tag]
+		if !ok {
+			if err = uc.CreateTag(&entity.Segments{
+				BizTag: tag,
+				MaxId:  1,
+				Step:   10000,
+			}); err != nil {
+				return []int64{}, err
+			}
+			val, _ = uc.alloc.BizTagMap[tag]
+		}
+		uc.alloc.Mu.Unlock()
+	}
+	return val.GetBatchId(uc, num)
 }

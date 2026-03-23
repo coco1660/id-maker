@@ -70,3 +70,18 @@ func (r *SegmentRepo) GetNextId(tag string) (*entity.Segments, error) {
 
 	return id, nil
 }
+
+// GetStep -.
+func (r *SegmentRepo) GetStep(tag string) (int64, error) {
+	var (
+		err error
+		id  = &entity.Segments{}
+		tx  = r.Engine.Prepare()
+	)
+	if _, err = tx.Where("biz_tag = ?", tag).Get(id); err != nil {
+		_ = tx.Rollback()
+		return id.Step, fmt.Errorf("SegmentRepo - GetStep - Get: %w", err)
+	}
+
+	return id.Step, nil
+}

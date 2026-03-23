@@ -5,6 +5,7 @@ import (
 	"id-maker/internal/usecase"
 	"id-maker/pkg/logger"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
@@ -23,6 +24,7 @@ func newSegmentRoutes(handler *gin.RouterGroup, s usecase.Segment, l logger.Inte
 		h.GET("/id/:tag", r.GetId)
 		h.GET("/snowid", r.GetSnowId)
 		h.POST("/tag", r.CreateTag)
+		h.GET("/id/batch/:tag/:num", r.GetBatchId)
 	}
 }
 
@@ -87,4 +89,44 @@ func (r *segmentRoutes) CreateTag(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, nil)
+}
+
+func (r *segmentRoutes) GetBatchId(c *gin.Context) {
+	var (
+		tag string
+		num string
+		ids []int64
+		err error
+	)
+
+	tag = c.Param("tag")
+	if tag == "" {
+		r.l.Error(err, "http - v1 - GetBatchId")
+		errorResponse(c, http.StatusBadRequest, "tag cannot empty")
+
+		return
+	}
+
+	num = c.Param("num")
+	if num == "" {
+		r.l.Error(err, "http - v1 - GetBatchId")
+		errorResponse(c, http.StatusBadRequest, "num cannot empty")
+	}
+	numInt, err := strconv.Atoi(num)
+	if err != nil {
+		r.l.Error(err, "http - v1 - GetBatchId")
+		errorResponse(c, http.StatusBadRequest, "num convert fail")
+	}
+
+	if ids, err = r.s.GetBatchId(tag, int64(numInt)); err != nil {
+		r.l.Error(err, "http - v1 - GetId")
+		errorResponse(c, http.StatusInternalServerError, "service problems")
+
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"ids":   ids,
+		"total": len(ids),
+	})
 }
